@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#07182f" />
+    <title>Editor de fotos | La Católica</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%230a1d3a%22/><text x=%2232%22 y=%2241%22 text-anchor=%22middle%22 font-size=%2225%22 fill=%22white%22>LC</text></svg>" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Editor La Católica, inicio">
+        <span class="brand-mark" aria-hidden="true">LC</span>
+        <span>
+          <strong>Editor de fotos</strong>
+          <small>La Católica</small>
+        </span>
+      </a>
+      <span class="privacy-note">Tu foto no sale de este dispositivo</span>
+    </header>
+
+    <main class="app-shell">
+      <section class="intro" aria-labelledby="page-title">
+        <p class="eyebrow">MARCO INSTITUCIONAL</p>
+        <h1 id="page-title">Convierte tu foto en una pieza lista para publicar.</h1>
+        <p>Sube una imagen, acomódala dentro del marco y descárgala. Sin registros.</p>
+      </section>
+
+      <section class="workspace" aria-label="Editor de foto">
+        <aside class="controls">
+          <div class="control-section">
+            <span class="step">1</span>
+            <div>
+              <h2>Elige una foto</h2>
+              <p>JPG, PNG o WebP. Recomendado: imagen horizontal.</p>
+            </div>
+          </div>
+
+          <label class="upload-zone" id="uploadZone" for="photoInput">
+            <input id="photoInput" type="file" accept="image/jpeg,image/png,image/webp" multiple />
+            <span class="upload-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="img"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5" /></svg>
+            </span>
+            <strong>Seleccionar fotos</strong>
+            <small>o arrástralas aquí · puedes elegir varias</small>
+          </label>
+
+          <section class="batch-panel" id="batchPanel" aria-label="Fotos cargadas" hidden>
+            <div class="batch-heading">
+              <div>
+                <span class="batch-label">LOTE DE FOTOS</span>
+                <strong id="batchCount">0 fotos</strong>
+              </div>
+              <button class="text-button" id="clearBatchButton" type="button">Limpiar lote</button>
+            </div>
+            <div class="batch-list" id="batchList" role="list" aria-label="Fotos del lote"></div>
+            <div class="batch-navigation" aria-label="Navegar entre fotos">
+              <button class="button secondary compact-button" id="previousPhotoButton" type="button" disabled aria-label="Foto anterior">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7" /></svg>
+                Anterior
+              </button>
+              <span class="batch-position" id="batchPosition" aria-live="polite">—</span>
+              <button class="button secondary compact-button" id="nextPhotoButton" type="button" disabled aria-label="Foto siguiente">
+                Siguiente
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg>
+              </button>
+            </div>
+            <button class="button primary batch-download" id="downloadBatchButton" type="button" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0 4-4m-4 4-4-4M5 19h14" /></svg>
+              Descargar lote
+            </button>
+          </section>
+
+          <div class="adjustments" id="adjustments" aria-disabled="true">
+            <div class="control-section compact">
+              <span class="step">2</span>
+              <div>
+                <h2>Ajusta el encuadre</h2>
+                <p>Arrastra la foto en la vista previa.</p>
+              </div>
+            </div>
+
+            <label class="range-label" for="zoomRange">
+              <span>Zoom</span>
+              <output id="zoomValue" for="zoomRange">100%</output>
+            </label>
+            <input id="zoomRange" type="range" min="100" max="250" value="100" step="1" disabled />
+
+            <div class="button-row">
+              <button class="button secondary" id="resetButton" type="button" disabled>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v6h6M20 20v-6h-6M5.6 15A7 7 0 0 0 18 17.4M18.4 9A7 7 0 0 0 6 6.6" /></svg>
+                Centrar
+              </button>
+              <button class="button secondary" id="replaceButton" type="button" disabled>
+                Cambiar foto
+              </button>
+            </div>
+          </div>
+
+          <div class="download-block">
+            <div class="control-section compact">
+              <span class="step">3</span>
+              <div>
+                <h2>Descarga</h2>
+                <p>Archivo de alta calidad, listo para compartir.</p>
+              </div>
+            </div>
+            <button class="button primary" id="downloadButton" type="button" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0 4-4m-4 4-4-4M5 19h14" /></svg>
+              Descargar imagen
+            </button>
+          </div>
+          <p class="status" id="status" role="status" aria-live="polite">Selecciona una foto para comenzar.</p>
+        </aside>
+
+        <div class="preview-panel">
+          <div class="preview-heading">
+            <div>
+              <span>VISTA PREVIA</span>
+              <strong>Formato horizontal 6:5</strong>
+            </div>
+            <span class="size-pill">1200 × 1000 px</span>
+          </div>
+
+          <div class="canvas-wrap" id="canvasWrap">
+            <canvas id="editorCanvas" width="1200" height="1000" aria-label="Vista previa de la foto con marco"></canvas>
+            <div class="empty-state" id="emptyState">
+              <span aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4 6.5A1.5 1.5 0 0 1 5.5 5h13A1.5 1.5 0 0 1 20 6.5v11a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5v-11Z M7 15l3-3 2.5 2.5 1.5-1.5 3 3 M8.5 9.5h.01" /></svg>
+              </span>
+              <strong>Tu foto aparecerá aquí</strong>
+              <small>El marco se aplicará automáticamente.</small>
+            </div>
+          </div>
+          <p class="drag-hint">Consejo: arrastra sobre la foto para ajustar su posición.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer>Centro de Capacitación Profesional La Católica</footer>
+    <script src="app.js"></script>
+  </body>
+</html>
