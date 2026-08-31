@@ -13,3 +13,7 @@ python -m http.server 4173 --directory editor-marco-la-catolica
 Luego visita `http://localhost:4173`.
 
 Todo el procesamiento ocurre en el navegador. Ninguna foto se envía a un servidor.
+
+## Demo pública
+
+https://adrinoaimar.github.io/editor-marco-la-catolica/
