@@ -27,7 +27,9 @@ const clearMaskPointsButton = document.querySelector('#clearMaskPointsButton');
 const maskModeButtons = [...document.querySelectorAll('[data-mask-mode]')];
 
 const configuredApi = new URLSearchParams(window.location.search).get('api');
-const API_BASE = String(window.PHOTO_EDITOR_API || configuredApi || '/api').replace(/\/$/, '');
+const isLocalPreview = window.location.protocol === 'file:' || ['localhost', '127.0.0.1'].includes(window.location.hostname);
+const localApi = isLocalPreview ? 'http://127.0.0.1:8787/api' : '/api';
+const API_BASE = String(window.PHOTO_EDITOR_API || configuredApi || localApi).replace(/\/$/, '');
 
 const state = {
   image: null,
@@ -95,44 +97,12 @@ function clampOffsets() {
 }
 
 function prepareLogo() {
-  const source = document.createElement('canvas');
-  source.width = logoImage.naturalWidth;
-  source.height = logoImage.naturalHeight;
-  const sourceContext = source.getContext('2d', { willReadFrequently: true });
-  sourceContext.drawImage(logoImage, 0, 0);
-  const pixels = sourceContext.getImageData(0, 0, source.width, source.height);
-  const { data } = pixels;
-  let minX = source.width;
-  let minY = source.height;
-  let maxX = 0;
-  let maxY = 0;
-
-  for (let i = 0; i < data.length; i += 4) {
-    const red = data[i];
-    const green = data[i + 1];
-    const blue = data[i + 2];
-    const brightness = (red + green + blue) / 3;
-    const saturation = Math.max(red, green, blue) - Math.min(red, green, blue);
-    if (brightness > 242 && saturation < 18) data[i + 3] = 0;
-    else if (brightness > 220 && saturation < 22) data[i + 3] = Math.max(20, Math.round((242 - brightness) * 12));
-
-    if (data[i + 3] > 10) {
-      const pixel = i / 4;
-      const x = pixel % source.width;
-      const y = Math.floor(pixel / source.width);
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x);
-      maxY = Math.max(maxY, y);
-    }
-  }
-
-  sourceContext.putImageData(pixels, 0, 0);
-  if (maxX <= minX || maxY <= minY) return;
+  // Usamos el PNG transparente preprocesado para que file:// y GitHub Pages
+  // rendericen el escudo real sin depender de getImageData/CORS.
   logoCanvas = document.createElement('canvas');
-  logoCanvas.width = maxX - minX + 1;
-  logoCanvas.height = maxY - minY + 1;
-  logoCanvas.getContext('2d').drawImage(source, minX, minY, logoCanvas.width, logoCanvas.height, 0, 0, logoCanvas.width, logoCanvas.height);
+  logoCanvas.width = logoImage.naturalWidth;
+  logoCanvas.height = logoImage.naturalHeight;
+  logoCanvas.getContext('2d').drawImage(logoImage, 0, 0);
   draw();
 }
 
@@ -192,7 +162,7 @@ logoImage.onerror = () => {
   logoCanvas = createFallbackLogo();
   draw();
 };
-logoImage.src = 'logo.png';
+logoImage.src = 'logo-transparent.png';
 
 function drawFrame(targetContext = ctx, targetCanvas = canvas) {
   const gradient = targetContext.createLinearGradient(0, targetCanvas.height * 0.57, 0, targetCanvas.height);
@@ -202,7 +172,13 @@ function drawFrame(targetContext = ctx, targetCanvas = canvas) {
   targetContext.fillStyle = gradient;
   targetContext.fillRect(0, targetCanvas.height * 0.5, targetCanvas.width, targetCanvas.height * 0.5);
 
-  if (logoCanvas) targetContext.drawImage(logoCanvas, 146, 838, 106, 130);
+  if (logoCanvas) {
+    const logoHeight = Math.round(targetCanvas.height * 0.13);
+    const logoWidth = Math.round(logoHeight * (logoCanvas.width / logoCanvas.height));
+    const logoX = Math.round(targetCanvas.width * 0.122);
+    const logoY = targetCanvas.height - logoHeight - Math.round(targetCanvas.height * 0.032);
+    targetContext.drawImage(logoCanvas, logoX, logoY, logoWidth, logoHeight);
+  }
 
   targetContext.fillStyle = 'rgba(255,255,255,.92)';
   targetContext.textAlign = 'center';
@@ -394,7 +370,9 @@ function updateBatchUI() {
   nextPhotoButton.disabled = count < 2 || state.selectedIndex < 0 || state.selectedIndex >= count - 1 || batchDownloadInProgress;
   clearBatchButton.disabled = count === 0 || batchDownloadInProgress;
   downloadBatchButton.disabled = count === 0 || batchDownloadInProgress || state.items.some((item) => !item.image);
-  professionalProcessButton.disabled = count === 0 || !backendAvailable || professionalBusy;
+  // El botón permanece disponible aunque el servicio esté apagado para mostrar
+  // cómo iniciarlo; no queda bloqueado sin explicación.
+  professionalProcessButton.disabled = count === 0 || professionalBusy;
   batchList.replaceChildren();
 
   state.items.forEach((item, index) => {
@@ -935,7 +913,12 @@ async function pollProfessionalJob(jobId) {
 }
 
 async function processProfessionalBatch() {
-  if (!backendAvailable || state.items.length === 0 || professionalBusy) return;
+  if (state.items.length === 0 || professionalBusy) return;
+  if (!backendAvailable) {
+    setStatus('El servicio HQ‑SAM no está iniciado. Abre ABRIR_EDITOR_PRO.bat y recarga esta página.', 'error');
+    checkProfessionalBackend();
+    return;
+  }
   saveCurrentItemSettings();
   professionalBusy = true;
   professionalProgress.hidden = false;

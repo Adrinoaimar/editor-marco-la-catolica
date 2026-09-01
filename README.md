@@ -18,6 +18,8 @@ La edición rápida y el ZIP local ocurren en el navegador. El botón HQ‑SAM s
 
 Desde la carpeta del proyecto instala `backend/requirements.txt` y ejecuta `python -m backend.server`. Para una web servida desde otro origen puedes definir `window.PHOTO_EDITOR_API` antes de `app.js` o usar el parámetro de desarrollo `?api=http://127.0.0.1:8787/api`. Consulta [backend/README.md](backend/README.md) para límites, anotaciones manuales, carpeta vigilada y programación.
 
+En Windows puedes abrir `ABRIR_EDITOR_PRO.bat`: inicia el backend y el servidor local, y abre el editor ya conectado. Si el botón muestra “Solo edición local”, recarga la página después de iniciar ese archivo.
+
 ## Demo pública
 
 https://adrinoaimar.github.io/editor-marco-la-catolica/
