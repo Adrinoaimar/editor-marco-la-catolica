@@ -2,3 +2,6 @@
 Thumbs.db
 .playwright-cli/
 .netlify/
+data/
+__pycache__/
+backend/__pycache__/

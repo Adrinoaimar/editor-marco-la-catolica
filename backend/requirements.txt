@@ -1,0 +1,7 @@
+numpy>=1.26
+opencv-python>=4.9
+Pillow>=10.0
+pillow-heif>=0.16
+torch>=2.1
+timm>=0.9
+# El paquete segment_anything se sirve desde tools/sam-hq del proyecto.

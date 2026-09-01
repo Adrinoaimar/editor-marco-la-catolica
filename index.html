@@ -17,14 +17,14 @@
           <small>La Católica</small>
         </span>
       </a>
-      <span class="privacy-note">Tu foto no sale de este dispositivo</span>
+      <span class="privacy-note">Edición local · HQ‑SAM opcional</span>
     </header>
 
     <main class="app-shell">
       <section class="intro" aria-labelledby="page-title">
         <p class="eyebrow">MARCO INSTITUCIONAL</p>
         <h1 id="page-title">Convierte tu foto en una pieza lista para publicar.</h1>
-        <p>Sube una imagen, acomódala dentro del marco y descárgala. Sin registros.</p>
+        <p>Sube una imagen, acomódala dentro del marco y descárgala. También puedes enviar un lote al proceso profesional HQ‑SAM.</p>
       </section>
 
       <section class="workspace" aria-label="Editor de foto">
@@ -33,12 +33,12 @@
             <span class="step">1</span>
             <div>
               <h2>Elige una foto</h2>
-              <p>JPG, PNG o WebP. Recomendado: imagen horizontal.</p>
+              <p>JPG, PNG, WebP o HEIC. Puedes seleccionar varias fotos.</p>
             </div>
           </div>
 
           <label class="upload-zone" id="uploadZone" for="photoInput">
-            <input id="photoInput" type="file" accept="image/jpeg,image/png,image/webp" multiple />
+            <input id="photoInput" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" multiple />
             <span class="upload-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" role="img"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 13v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5" /></svg>
             </span>
@@ -70,6 +70,27 @@
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0 4-4m-4 4-4-4M5 19h14" /></svg>
               Descargar lote
             </button>
+
+            <section class="professional-panel" aria-label="Procesamiento profesional HQ-SAM">
+              <div class="professional-heading">
+                <div>
+                  <span class="batch-label">PROCESAMIENTO PROFESIONAL</span>
+                  <strong>HQ‑SAM en segundo plano</strong>
+                </div>
+                <span class="server-badge" id="serverBadge">Comprobando…</span>
+              </div>
+              <p class="professional-copy">Segmenta a la candidata, conserva accesorios, aplica desenfoque de fondo y genera horizontal 1920 × 1080 + vertical 1080 × 1350.</p>
+              <button class="button secondary professional-button" id="professionalProcessButton" type="button" disabled>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4m0 10v4M3 12h4m10 0h4M5.6 5.6l2.8 2.8m7.2 7.2 2.8 2.8m0-12.8-2.8 2.8m-7.2 7.2-2.8 2.8" /></svg>
+                Procesar con HQ‑SAM
+              </button>
+              <div class="professional-progress" id="professionalProgress" hidden>
+                <div class="progress-meta"><span id="professionalStage">En cola…</span><strong id="professionalPercent">0%</strong></div>
+                <div class="progress-track"><span id="professionalProgressBar"></span></div>
+                <p id="professionalProgressText">Preparando lote.</p>
+                <button class="text-button" id="cancelProfessionalButton" type="button">Cancelar lote</button>
+              </div>
+            </section>
           </section>
 
           <div class="adjustments" id="adjustments" aria-disabled="true">
@@ -96,6 +117,20 @@
                 Cambiar foto
               </button>
             </div>
+
+            <section class="mask-tools" aria-label="Puntos manuales para segmentación">
+              <div class="mask-tools-heading">
+                <span>Puntos manuales</span>
+                <small id="maskPointStatus">Opcional</small>
+              </div>
+              <p>Marca accesorios o zonas difíciles antes de enviar el lote.</p>
+              <div class="mask-mode-row" role="group" aria-label="Modo de punto">
+                <button class="mask-mode is-active" data-mask-mode="off" type="button">Mover foto</button>
+                <button class="mask-mode" data-mask-mode="positive" type="button">Incluir</button>
+                <button class="mask-mode" data-mask-mode="negative" type="button">Excluir</button>
+              </div>
+              <button class="text-button" id="clearMaskPointsButton" type="button">Limpiar puntos de esta foto</button>
+            </section>
           </div>
 
           <div class="download-block">
@@ -134,6 +169,17 @@
             </div>
           </div>
           <p class="drag-hint">Consejo: arrastra sobre la foto para ajustar su posición.</p>
+
+          <section class="results-panel" id="resultsPanel" aria-label="Resultados profesionales" hidden>
+            <div class="results-heading">
+              <div>
+                <span>RESULTADOS HQ‑SAM</span>
+                <strong>Antes y después</strong>
+              </div>
+              <a class="button secondary compact-button" id="resultsDownloadButton" href="#" hidden>Descargar ZIP</a>
+            </div>
+            <div class="results-gallery" id="resultsGallery"></div>
+          </section>
         </div>
       </section>
     </main>

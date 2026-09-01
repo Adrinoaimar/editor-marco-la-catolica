@@ -11,6 +11,23 @@ const resetButton = document.querySelector('#resetButton');
 const replaceButton = document.querySelector('#replaceButton');
 const downloadButton = document.querySelector('#downloadButton');
 const status = document.querySelector('#status');
+const professionalProcessButton = document.querySelector('#professionalProcessButton');
+const professionalProgress = document.querySelector('#professionalProgress');
+const professionalStage = document.querySelector('#professionalStage');
+const professionalPercent = document.querySelector('#professionalPercent');
+const professionalProgressBar = document.querySelector('#professionalProgressBar');
+const professionalProgressText = document.querySelector('#professionalProgressText');
+const cancelProfessionalButton = document.querySelector('#cancelProfessionalButton');
+const serverBadge = document.querySelector('#serverBadge');
+const resultsPanel = document.querySelector('#resultsPanel');
+const resultsGallery = document.querySelector('#resultsGallery');
+const resultsDownloadButton = document.querySelector('#resultsDownloadButton');
+const maskPointStatus = document.querySelector('#maskPointStatus');
+const clearMaskPointsButton = document.querySelector('#clearMaskPointsButton');
+const maskModeButtons = [...document.querySelectorAll('[data-mask-mode]')];
+
+const configuredApi = new URLSearchParams(window.location.search).get('api');
+const API_BASE = String(window.PHOTO_EDITOR_API || configuredApi || '/api').replace(/\/$/, '');
 
 const state = {
   image: null,
@@ -28,6 +45,11 @@ const state = {
 let logoCanvas = null;
 let replaceRequested = false;
 let batchDownloadInProgress = false;
+let professionalJobId = null;
+let professionalPollTimer = null;
+let professionalBusy = false;
+let backendAvailable = false;
+let maskMode = 'off';
 
 input.multiple = true;
 const batchPanel = document.querySelector('#batchPanel');
@@ -52,6 +74,10 @@ function setEnabled(enabled) {
   downloadButton.disabled = !enabled;
   emptyState.hidden = enabled;
   canvasWrap.classList.toggle('is-ready', enabled);
+}
+
+function isHeicFile(file) {
+  return /\.hei[cf]$/i.test(file.name || '') || ['image/heic', 'image/heif'].includes((file.type || '').toLowerCase());
 }
 
 function getCoverScale() {
@@ -208,6 +234,65 @@ function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (!state.image) return;
   drawImageWithFrame(ctx, canvas, state.image, state.zoom, state.offsetX, state.offsetY);
+  drawManualMarkers();
+}
+
+function updateMaskPointStatus() {
+  const item = state.items[state.selectedIndex];
+  if (!item) {
+    maskPointStatus.textContent = 'Opcional';
+    return;
+  }
+  const positives = item.positivePoints?.length || 0;
+  const negatives = item.negativePoints?.length || 0;
+  maskPointStatus.textContent = positives || negatives ? `+${positives} · −${negatives}` : 'Opcional';
+}
+
+function drawManualMarkers() {
+  const item = state.items[state.selectedIndex];
+  if (!state.image || !item) return;
+  const scale = getCoverScale() * state.zoom;
+  const width = state.image.naturalWidth * scale;
+  const height = state.image.naturalHeight * scale;
+  const originX = (canvas.width - width) / 2 + state.offsetX;
+  const originY = (canvas.height - height) / 2 + state.offsetY;
+  const drawPoints = (points, color, symbol) => {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.strokeStyle = 'rgba(0,0,0,.7)';
+    ctx.lineWidth = 3;
+    ctx.font = '700 18px Arial, sans-serif';
+    points.forEach(([x, y]) => {
+      const px = originX + x * scale;
+      const py = originY + y * scale;
+      ctx.beginPath();
+      ctx.arc(px, py, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(symbol, px, py + 1);
+      ctx.fillStyle = color;
+    });
+    ctx.restore();
+  };
+  drawPoints(item.positivePoints || [], '#1bad6d', '+');
+  drawPoints(item.negativePoints || [], '#d64b4b', '−');
+}
+
+function sourcePointFromEvent(event) {
+  if (!state.image) return null;
+  const rect = canvas.getBoundingClientRect();
+  const canvasX = (event.clientX - rect.left) * (canvas.width / rect.width);
+  const canvasY = (event.clientY - rect.top) * (canvas.height / rect.height);
+  const scale = getCoverScale() * state.zoom;
+  const width = state.image.naturalWidth * scale;
+  const height = state.image.naturalHeight * scale;
+  return {
+    x: Math.max(0, Math.min(state.image.naturalWidth - 1, (canvasX - ((canvas.width - width) / 2 + state.offsetX)) / scale)),
+    y: Math.max(0, Math.min(state.image.naturalHeight - 1, (canvasY - ((canvas.height - height) / 2 + state.offsetY)) / scale)),
+  };
 }
 
 function resetPosition() {
@@ -221,8 +306,9 @@ function resetPosition() {
 }
 
 function validateFile(file) {
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-    return 'Formato no compatible. Usa JPG, PNG o WebP.';
+  const type = (file.type || '').toLowerCase();
+  if (!['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'].includes(type) && !isHeicFile(file)) {
+    return 'Formato no compatible. Usa JPG, PNG, WebP o HEIC.';
   }
   if (file.size > 30 * 1024 * 1024) {
     return 'La imagen supera 30 MB. Elige un archivo más ligero.';
@@ -244,6 +330,9 @@ function readImage(file) {
         zoom: 1,
         offsetX: 0,
         offsetY: 0,
+        positivePoints: [],
+        negativePoints: [],
+        backendOnly: false,
       });
     };
     image.onerror = () => {
@@ -252,6 +341,21 @@ function readImage(file) {
     };
     image.src = url;
   });
+}
+
+function createBackendOnlyItem(file) {
+  return {
+    file,
+    image: null,
+    fileName: file.name.replace(/\.[^.]+$/, '') || 'foto-la-catolica',
+    previewUrl: '',
+    zoom: 1,
+    offsetX: 0,
+    offsetY: 0,
+    positivePoints: [],
+    negativePoints: [],
+    backendOnly: true,
+  };
 }
 
 function saveCurrentItemSettings() {
@@ -275,7 +379,8 @@ function selectItem(index) {
   zoomRange.value = String(Math.round(state.zoom * 100));
   zoomValue.value = `${zoomRange.value}%`;
   clampOffsets();
-  setEnabled(true);
+  setEnabled(Boolean(item.image));
+  updateMaskPointStatus();
   updateBatchUI();
   draw();
 }
@@ -288,7 +393,8 @@ function updateBatchUI() {
   previousPhotoButton.disabled = count < 2 || state.selectedIndex <= 0 || batchDownloadInProgress;
   nextPhotoButton.disabled = count < 2 || state.selectedIndex < 0 || state.selectedIndex >= count - 1 || batchDownloadInProgress;
   clearBatchButton.disabled = count === 0 || batchDownloadInProgress;
-  downloadBatchButton.disabled = count === 0 || batchDownloadInProgress;
+  downloadBatchButton.disabled = count === 0 || batchDownloadInProgress || state.items.some((item) => !item.image);
+  professionalProcessButton.disabled = count === 0 || !backendAvailable || professionalBusy;
   batchList.replaceChildren();
 
   state.items.forEach((item, index) => {
@@ -307,8 +413,9 @@ function updateBatchUI() {
 
     const thumbnail = document.createElement('img');
     thumbnail.className = 'batch-thumb';
-    thumbnail.src = item.previewUrl;
-    thumbnail.alt = '';
+    if (item.previewUrl) thumbnail.src = item.previewUrl;
+    else thumbnail.classList.add('is-missing');
+    thumbnail.alt = item.backendOnly ? 'Vista previa disponible al procesar HEIC' : '';
     card.appendChild(thumbnail);
 
     const metadata = document.createElement('span');
@@ -318,7 +425,7 @@ function updateBatchUI() {
     metadata.appendChild(name);
     const itemState = document.createElement('span');
     itemState.className = 'batch-item-state';
-    itemState.textContent = index === state.selectedIndex ? 'Editando' : 'Lista';
+    itemState.textContent = item.backendOnly ? 'HEIC · servidor' : (index === state.selectedIndex ? 'Editando' : 'Lista');
     metadata.appendChild(itemState);
     card.appendChild(metadata);
 
@@ -384,7 +491,7 @@ async function loadFiles(fileList, { replaceIndex = null } = {}) {
     else validFiles.push(file);
   }
   if (validFiles.length === 0) {
-    setStatus('No hay archivos compatibles. Usa JPG, PNG o WebP.', 'error');
+    setStatus('No hay archivos compatibles. Usa JPG, PNG, WebP o HEIC.', 'error');
     return;
   }
 
@@ -395,7 +502,8 @@ async function loadFiles(fileList, { replaceIndex = null } = {}) {
     try {
       loadedItems.push(await readImage(file));
     } catch {
-      readErrors += 1;
+      if (isHeicFile(file)) loadedItems.push(createBackendOnlyItem(file));
+      else readErrors += 1;
     }
   }
   if (loadedItems.length === 0) {
@@ -461,6 +569,18 @@ uploadZone.addEventListener('drop', (event) => loadFiles(event.dataTransfer.file
 
 canvasWrap.addEventListener('pointerdown', (event) => {
   if (!state.image) return;
+  if (maskMode !== 'off') {
+    const point = sourcePointFromEvent(event);
+    const item = state.items[state.selectedIndex];
+    if (point && item) {
+      const target = maskMode === 'positive' ? item.positivePoints : item.negativePoints;
+      target.push([Math.round(point.x), Math.round(point.y)]);
+      updateMaskPointStatus();
+      draw();
+      setStatus(maskMode === 'positive' ? 'Punto de inclusión añadido.' : 'Punto de exclusión añadido.', 'success');
+    }
+    return;
+  }
   state.dragging = true;
   state.pointerX = event.clientX;
   state.pointerY = event.clientY;
@@ -686,5 +806,194 @@ downloadBatchButton.addEventListener('click', async () => {
   }
 });
 
+function apiUrl(path) {
+  const normalized = String(path);
+  if (/^\/?api\//.test(normalized)) {
+    const origin = API_BASE.replace(/\/api$/, '');
+    return `${origin}/${normalized.replace(/^\//, '')}`;
+  }
+  return `${API_BASE}/${normalized.replace(/^\//, '')}`;
+}
+
+async function checkProfessionalBackend() {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1800);
+    const response = await fetch(apiUrl('health'), { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!response.ok) throw new Error('offline');
+    const payload = await response.json();
+    backendAvailable = Boolean(payload.ok && payload.model_available);
+    serverBadge.textContent = backendAvailable ? 'Servidor listo' : 'Modelo no instalado';
+    serverBadge.classList.toggle('is-ready', backendAvailable);
+    serverBadge.classList.toggle('is-offline', !backendAvailable);
+  } catch {
+    backendAvailable = false;
+    serverBadge.textContent = 'Solo edición local';
+    serverBadge.classList.remove('is-ready');
+    serverBadge.classList.add('is-offline');
+  }
+  updateBatchUI();
+}
+
+function setProfessionalProgress(payload) {
+  const progress = payload.progress || {};
+  const total = Math.max(1, Number(progress.total || payload.items?.length || 1));
+  const completed = Math.min(total, Number(progress.completed || 0));
+  const percent = payload.status === 'done' ? 100 : Math.round((completed / total) * 100);
+  professionalPercent.textContent = `${percent}%`;
+  professionalProgressBar.style.width = `${percent}%`;
+  professionalStage.textContent = progress.stage === 'segmenting' ? 'Segmentando candidata…' : progress.stage === 'composing' ? 'Aplicando acabado…' : progress.stage === 'qa' ? 'Revisando máscara…' : payload.status === 'done' ? 'Lote listo' : 'En cola…';
+  professionalProgressText.textContent = progress.current ? `${completed} de ${total}: ${progress.current}` : `${completed} de ${total} fotos procesadas.`;
+}
+
+function renderProfessionalResults(job) {
+  resultsGallery.replaceChildren();
+  (job.items || []).forEach((item) => {
+    const card = document.createElement('article');
+    card.className = 'result-card';
+    const title = document.createElement('h3');
+    title.textContent = item.name || item.source || 'Foto';
+    card.appendChild(title);
+    if (item.status === 'error') {
+      const message = document.createElement('p');
+      message.className = 'result-card-status review';
+      message.textContent = item.error || 'No se pudo procesar.';
+      card.appendChild(message);
+      resultsGallery.appendChild(card);
+      return;
+    }
+    const grid = document.createElement('div');
+    grid.className = 'result-card-grid';
+    const before = document.createElement('figure');
+    const beforeImage = document.createElement('img');
+    const sourceItem = state.items.find((candidate) => candidate.file.name === item.name);
+    if (sourceItem?.previewUrl) beforeImage.src = sourceItem.previewUrl;
+    beforeImage.alt = 'Antes';
+    before.appendChild(beforeImage);
+    const beforeCaption = document.createElement('figcaption');
+    beforeCaption.textContent = 'Antes';
+    before.appendChild(beforeCaption);
+    grid.appendChild(before);
+    const horizontal = item.outputs?.find((output) => output.type === 'horizontal');
+    const after = document.createElement('figure');
+    const afterImage = document.createElement('img');
+    if (horizontal) afterImage.src = apiUrl(horizontal.url);
+    afterImage.alt = 'Después';
+    after.appendChild(afterImage);
+    const afterCaption = document.createElement('figcaption');
+    afterCaption.textContent = 'Horizontal 1920 × 1080';
+    after.appendChild(afterCaption);
+    grid.appendChild(after);
+    const vertical = item.outputs?.find((output) => output.type === 'vertical');
+    if (vertical) {
+      const verticalFigure = document.createElement('figure');
+      const verticalImage = document.createElement('img');
+      verticalImage.src = apiUrl(vertical.url);
+      verticalImage.alt = 'Versión vertical';
+      verticalFigure.appendChild(verticalImage);
+      const verticalCaption = document.createElement('figcaption');
+      verticalCaption.textContent = 'Vertical 1080 × 1350';
+      verticalFigure.appendChild(verticalCaption);
+      grid.appendChild(verticalFigure);
+    }
+    card.appendChild(grid);
+    const resultStatus = document.createElement('p');
+    resultStatus.className = `result-card-status${item.needs_review ? ' review' : ''}`;
+    resultStatus.textContent = item.needs_review ? 'Requiere revisión de máscara' : 'Máscara aprobada';
+    card.appendChild(resultStatus);
+    resultsGallery.appendChild(card);
+  });
+  resultsPanel.hidden = false;
+  resultsDownloadButton.hidden = job.status !== 'done';
+  resultsDownloadButton.href = job.download ? apiUrl(job.download) : '#';
+}
+
+async function pollProfessionalJob(jobId) {
+  try {
+    const response = await fetch(apiUrl(`jobs/${jobId}`));
+    if (!response.ok) throw new Error('No se pudo consultar el lote.');
+    const job = await response.json();
+    setProfessionalProgress(job);
+    if (job.status === 'done' || job.status === 'error' || job.status === 'cancelled') {
+      professionalBusy = false;
+      professionalJobId = null;
+      cancelProfessionalButton.hidden = true;
+      professionalProgress.hidden = false;
+      renderProfessionalResults(job);
+      setStatus(job.status === 'done' ? 'Proceso profesional terminado. Revisa la galería de resultados.' : (job.error || 'El lote terminó con incidencias.'), job.status === 'done' ? 'success' : 'error');
+      updateBatchUI();
+      return;
+    }
+    professionalPollTimer = setTimeout(() => pollProfessionalJob(jobId), 900);
+  } catch (error) {
+    professionalBusy = false;
+    professionalJobId = null;
+    setStatus(error.message || 'No se pudo consultar el proceso profesional.', 'error');
+    updateBatchUI();
+  }
+}
+
+async function processProfessionalBatch() {
+  if (!backendAvailable || state.items.length === 0 || professionalBusy) return;
+  saveCurrentItemSettings();
+  professionalBusy = true;
+  professionalProgress.hidden = false;
+  cancelProfessionalButton.hidden = false;
+  resultsPanel.hidden = true;
+  updateBatchUI();
+  const formData = new FormData();
+  state.items.forEach((item) => formData.append('files', item.file, item.file.name));
+  formData.append('annotations', JSON.stringify(state.items.map((item) => ({
+    fileName: item.file.name,
+    positive: item.positivePoints || [],
+    negative: item.negativePoints || [],
+  }))));
+  try {
+    setStatus('Enviando lote al proceso profesional…');
+    const response = await fetch(apiUrl('jobs'), { method: 'POST', body: formData });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'No se pudo crear el lote.');
+    professionalJobId = payload.id;
+    setProfessionalProgress(payload);
+    setStatus('Lote en cola. Puedes seguir ajustando la vista local.');
+    pollProfessionalJob(professionalJobId);
+  } catch (error) {
+    professionalBusy = false;
+    professionalJobId = null;
+    setStatus(error.message || 'No se pudo enviar el lote.', 'error');
+    updateBatchUI();
+  }
+}
+
+professionalProcessButton.addEventListener('click', processProfessionalBatch);
+cancelProfessionalButton.addEventListener('click', async () => {
+  if (!professionalJobId) return;
+  try {
+    await fetch(apiUrl(`jobs/${professionalJobId}/cancel`), { method: 'POST' });
+    setStatus('Cancelando lote…');
+  } catch {
+    setStatus('No se pudo cancelar el lote.', 'error');
+  }
+});
+
+maskModeButtons.forEach((button) => button.addEventListener('click', () => {
+  maskMode = button.dataset.maskMode || 'off';
+  maskModeButtons.forEach((candidate) => candidate.classList.toggle('is-active', candidate === button));
+  canvasWrap.classList.toggle('is-marking', maskMode !== 'off');
+  setStatus(maskMode === 'positive' ? 'Haz clic en la candidata o accesorio para incluirlo.' : maskMode === 'negative' ? 'Haz clic en el fondo o accesorio para excluirlo.' : 'Arrastra la foto para ajustar su posición.');
+}));
+
+clearMaskPointsButton.addEventListener('click', () => {
+  const item = state.items[state.selectedIndex];
+  if (!item) return;
+  item.positivePoints = [];
+  item.negativePoints = [];
+  updateMaskPointStatus();
+  draw();
+  setStatus('Puntos manuales eliminados.', 'success');
+});
+
 setEnabled(false);
 updateBatchUI();
+checkProfessionalBackend();
